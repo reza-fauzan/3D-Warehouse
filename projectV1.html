@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Rack</title>
+</head>
+
+<body>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.140.0/build/three.module.js",
+                "controls": "https://unpkg.com/three@0.140.0/examples/jsm/controls/OrbitControls.js",
+                "three/addons/": "https://unpkg.com/three@0.140.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'controls';
+
+        const scene = new THREE.Scene();
+        const renderer = new THREE.WebGLRenderer({ alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Mendefinisikan kamera
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        // Mengatur posisi awal kamera (dari depan atas sedikit)
+        camera.position.set(10, 10, 11);
+
+        // Mengatur arah pandang kamera
+        camera.lookAt(0, 0, 0);
+
+        // Mengatur kontrol
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.25;
+
+        const cubes = [];
+        let racks = [];
+
+        const gap = 0.2;
+        let totalCubesX = 6; // Jumlah balok ke belakang
+        let totalCubesY = 4; // Jumlah balok ke atas
+        let totalCubesZ = 6; // Jumlah balok ke samping
+        const zGap = 2.5;
+
+        let previousRackY = -Infinity; // Inisialisasi posisi Y rak sebelumnya
+
+        function createCube(geometry, material, position, name) {
+            const cube = new THREE.Mesh(geometry, material);
+            cube.position.copy(position);
+            cube.name = name; // Set nama balok
+            scene.add(cube);
+            cubes.push(cube);
+        }
+
+        function createRack(position, isTopRow, rackName) {
+            const rack = new THREE.Group();
+
+            const rackMaterial = new THREE.MeshStandardMaterial({ color: 0xCDAC7B, metalness: 0.5 });
+            const rackGeometry = new THREE.BoxGeometry(2.5, 0.1, 1.5);
+            const bottomRack = new THREE.Mesh(rackGeometry, rackMaterial);
+            bottomRack.position.set(0, 0.03, 0);
+            rack.add(bottomRack);
+
+            // Membuat bagian penutup rak hanya untuk rak teratas dalam kolomnya
+            if (isTopRow) {
+                const coverMaterial = new THREE.MeshStandardMaterial({ color: 0xCDAC7B, metalness: 0.5 });
+                const coverGeometry = new THREE.BoxGeometry(2.5, 0.1, 1.5);
+                const cover = new THREE.Mesh(coverGeometry, coverMaterial);
+                cover.position.set(0, 1.16, 0); // Letakkan di atas rak
+                rack.add(cover);
+            }
+
+            const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x6B6B6B, metalness: 0.5, roughness: 0.7 });
+            const frameGeometry = new THREE.BoxGeometry(0.1, 1.2, 0.1);
+            const frame1 = new THREE.Mesh(frameGeometry, frameMaterial);
+            frame1.position.set(-1.2, 0.6, -0.7);
+            rack.add(frame1);
+            const frame2 = new THREE.Mesh(frameGeometry, frameMaterial);
+            frame2.position.set(1.2, 0.6, -0.7);
+            rack.add(frame2);
+            const frame3 = new THREE.Mesh(frameGeometry, frameMaterial);
+            frame3.position.set(-1.2, 0.6, 0.7);
+            rack.add(frame3);
+            const frame4 = new THREE.Mesh(frameGeometry, frameMaterial);
+            frame4.position.set(1.2, 0.6, 0.7);
+            rack.add(frame4);
+
+            rack.position.copy(position);
+            scene.add(rack);
+
+            // Tambahkan format rak ke dalam array racks
+            racks.push(rackName);
+        }
+
+        for (let x = 0; x < totalCubesX; x++) {
+            for (let y = 0; y < totalCubesY; y++) {
+                for (let z = 0; z < totalCubesZ; z++) {
+                    const geometry = new THREE.BoxGeometry(1.7, 1, 1);
+                    const material = new THREE.MeshPhongMaterial({ color: 0x0E95FE, opacity: 0.5, transparent: true });
+
+                    let positionX = x * (2 + gap) - 4;
+                    let positionY = y * (1 + gap);
+                    let positionZ = z * (1 + gap) + Math.floor(z / 2) * zGap;
+
+                    const position = new THREE.Vector3(positionX, positionY, positionZ);
+
+                    // Menentukan nama balok
+                    const name = `R${x + 1}S${y + 1}B${z + 1}`;
+
+                    createCube(geometry, material, position, name);
+
+                    const rackPosition = new THREE.Vector3(position.x, position.y - 0.6, position.z);
+
+                    // Menentukan nama rak
+                    const rackName = `R${x + 1}S${y + 1}B${z + 1}`;
+
+                    // Menentukan apakah ini rak teratas dalam kolomnya
+                    const isTopRow = y === totalCubesY - 1;
+
+                    createRack(rackPosition, isTopRow, rackName); // Mengirimkan informasi apakah ini rak teratas dan nama rak
+                }
+            }
+        }
+
+        // Tampilkan array racks setelah semua rak selesai dibuat
+        console.log("Racks:", racks);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Pencahayaan ambient dengan intensitas 50%
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0xffffff, 1, 100); // Cahaya titik putih dengan intensitas 100%
+        pointLight.position.set(50, 50, 50); // Letakkan cahaya di posisi (50, 50, 50)
+        scene.add(pointLight);
+
+        const hemisphereLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 1); // Pencahayaan hemisphere dengan warna atas kuning dan bawah biru, intensitas 100%
+        scene.add(hemisphereLight);
+
+        // Tambahkan event listener untuk menampilkan nama balok saat mouse masuk ke balok
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let hoveredObject = null;
+
+        function onMouseMove(event) {
+            // Hitung posisi mouse dalam koordinat dunia
+            mouse.x = (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
+            mouse.y = -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
+
+            // Perbarui raycaster
+            raycaster.setFromCamera(mouse, camera);
+
+            // Dapatkan objek yang terkena raycaster
+            const intersects = raycaster.intersectObjects(cubes);
+
+            if (intersects.length > 0) {
+                const object = intersects[0].object;
+                if (object !== hoveredObject) {
+                    if (hoveredObject) {
+                        hoveredObject.material.opacity = 0.5; // Reset opacity
+                    }
+                    hoveredObject = object;
+                    hoveredObject.material.opacity = 1; // Set opacity menjadi 1 untuk efek hover
+                    document.getElementById('cubeName').innerText = hoveredObject.name;
+                }
+            } else {
+                if (hoveredObject) {
+                    hoveredObject.material.opacity = 0.5; // Reset opacity
+                    hoveredObject = null;
+                    document.getElementById('cubeName').innerText = ''; // Reset nama balok
+                }
+            }
+        }
+
+        document.addEventListener('mousemove', onMouseMove, false);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+    </script>
+
+    <!-- Container untuk menampilkan nama balok -->
+    <div id="cubeName"
+        style="position: absolute; top: 10px; left: 10px; background-color: rgba(255, 255, 255, 0.5); padding: 5px;">
+    </div>
+</body>
+
+</html>
