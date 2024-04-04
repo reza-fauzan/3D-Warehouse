@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Data Warehouse</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #controlsContainer {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+        }
+
+        #controlsContainer button {
+            margin: 5px;
+            padding: 8px 12px;
+        }
+
+        /* produk info */
+        .product-info {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .product-info h3 {
+            margin-top: 0;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .product-info p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .product-info span {
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+
+<body>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.140.0/build/three.module.js",
+                "controls": "https://unpkg.com/three@0.140.0/examples/jsm/controls/OrbitControls.js",
+                "three/addons/": "https://unpkg.com/three@0.140.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'controls';
+
+        const scene = new THREE.Scene();
+        const renderer = new THREE.WebGLRenderer({ alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Variabel Backend
+        let cubeData = {
+            'R1S1B1': {
+                'product': 'Product A',
+                'qty': 100,
+                'uom': 'pcs',
+                'lot_number': 'LOT/001',
+                'stock_movement': 'fast',
+                'stock_status': 'near_expired',
+                'expired_date': '2025-01-01',
+            },
+            'R1S1B2': {
+                'product': 'Product B',
+                'qty': 50,
+                'uom': 'pcs',
+                'lot_number': 'LOT/002',
+                'stock_movement': 'slow',
+                'stock_status': 'expired',
+                'expired_date': '2023-01-01',
+            },
+            'R2S1B2': {
+                'product': 'Product C',
+                'qty': 150,
+                'uom': 'pcs',
+                'lot_number': 'LOT/002',
+                'stock_movement': 'medium',
+                'stock_status': 'good_stock',
+                'expired_date': '2028-01-01',
+            },
+        }
+
+        // Mendefinisikan kamera
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
+
+        // Mengatur posisi awal kamera (dari depan atas sedikit)
+        camera.position.set(22, 9, 18);
+
+        // Mengatur kontrol
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.25;
+
+        // Function to rotate clockwise
+        function rotateClockwise() {
+            scene.rotation.y -= Math.PI / 2;
+            setCameraToCenter();
+        }
+
+        // Function to rotate anti-clockwise
+        function rotateAntiClockwise() {
+            scene.rotation.y += Math.PI / 2;
+            setCameraToCenter();
+        }
+
+        // Function to reset rotation to default
+        function resetRotation() {
+            const boundingBox = new THREE.Box3().setFromObject(scene); // Hitung bounding box dari seluruh objek dalam scene
+            const center = new THREE.Vector3(); // Buat vektor untuk menampung titik tengah bounding box
+
+            boundingBox.getCenter(center); // Dapatkan titik tengah bounding box
+
+            // Atur rotasi scene ke 0 (posisi default)
+            scene.rotation.y = 0;
+
+            // Atur posisi kamera ke titik tengah yang dihitung secara dinamis
+            camera.position.copy(center.clone().add(new THREE.Vector3(22, 9, 18))); // Tambahkan offset jika diperlukan
+            controls.target.copy(center); // Atur fokus kamera ke titik tengah
+            controls.update(); // Perbarui kontrol
+        }
+
+
+        // Create rotate buttons
+        const controlsContainer = document.createElement('div');
+        controlsContainer.id = 'controlsContainer';
+
+        const clockwiseButton = document.createElement('button');
+        clockwiseButton.textContent = 'Rotate Right';
+        clockwiseButton.addEventListener('click', rotateClockwise);
+
+        const antiClockwiseButton = document.createElement('button');
+        antiClockwiseButton.textContent = 'Rotate Left';
+        antiClockwiseButton.addEventListener('click', rotateAntiClockwise);
+
+        const resetButton = document.createElement('button');
+        resetButton.textContent = 'Center';
+        resetButton.addEventListener('click', resetRotation);
+
+        controlsContainer.appendChild(clockwiseButton);
+        controlsContainer.appendChild(antiClockwiseButton);
+        controlsContainer.appendChild(resetButton);
+        document.body.appendChild(controlsContainer);
+
+        // End Create rotate button
+
+        const cubes = [];
+        let racks = [];
+
+        const gap = 0.2;
+        const zGap = 2.5;
+        let totalCubesX = 6; // Jumlah balok ke belakang
+        let totalCubesY = 3; // Jumlah balok ke atas
+        let totalCubesZ = 6; // Jumlah balok ke samping
+
+        let previousRackY = -Infinity; // Inisialisasi posisi Y rak sebelumnya
+
+        function createCube(geometry, material, position, name, data) {
+            const cube = new THREE.Mesh(geometry, material);
+            cube.position.copy(position);
+            cube.name = name; // Set nama balok
+            cube.data = data;
+            scene.add(cube);
+            cubes.push(cube);
+        }
+
+        function createRack(position, isTopRow, format_rack) {
+            const rack = new THREE.Group();
+
+            const rackMaterial = new THREE.MeshStandardMaterial({ color: 0xAAAAAA, metalness: 0.1 });
+            const rackGeometry = new THREE.BoxGeometry(2.2, 0.1, 1.2);
+            const bottomRack = new THREE.Mesh(rackGeometry, rackMaterial);
+            bottomRack.position.set(0, 0.03, 0);
+            rack.add(bottomRack);
+
+            // Membuat bagian penutup rak hanya untuk rak teratas dalam kolomnya
+            if (isTopRow) {
+                const coverMaterial = new THREE.MeshStandardMaterial({ color: 0xAAAAAA, metalness: 0.1 });
+                const coverGeometry = new THREE.BoxGeometry(2.2, 0.1, 1.2);
+                const cover = new THREE.Mesh(coverGeometry, coverMaterial);
+                cover.position.set(0, 1.16, 0); // Letakkan di atas rak
+                rack.add(cover);
+            }
+
+            scene.add(rack);
+            rack.position.copy(position);
+
+            // Tambahkan format rak ke dalam array racks
+            racks.push(format_rack);
+        }
+
+        for (let x = 0; x < totalCubesX; x++) {
+            for (let y = 0; y < totalCubesY; y++) {
+                for (let z = 0; z < totalCubesZ; z++) {
+                    const geometry = new THREE.BoxGeometry(1.7, 1, 1);
+                    const material = new THREE.MeshBasicMaterial({ color: 0x0E95FE, opacity: 0.5, transparent: true });
+
+                    let positionX = x * (2 + gap) - 4;
+                    let positionY = y * (1 + gap);
+                    let positionZ = z * (1 + gap) + Math.floor(z / 2) * zGap;
+
+                    const position = new THREE.Vector3(positionX, positionY, positionZ);
+
+                    // Menentukan nama balok
+                    const name = `R${x + 1}S${y + 1}B${z + 1}`;
+
+                    // Cari name dalam rack data
+                    let data = undefined;
+                    if (name in cubeData) {
+                        data = cubeData[name];
+                    }
+
+                    createCube(geometry, material, position, name, data);
+
+                    const rackPosition = new THREE.Vector3(position.x, position.y - 0.6, position.z);
+
+                    // Menentukan nama rak
+                    const format_rack = `R${x + 1}S${y + 1}B${z + 1}`;
+
+                    // Menentukan apakah ini rak teratas dalam kolomnya
+                    const isTopRow = y === totalCubesY - 1;
+
+                    createRack(rackPosition, isTopRow, format_rack); // Mengirimkan informasi apakah ini rak teratas dan nama rak
+                }
+            }
+        }
+
+        // Tampilkan array racks setelah semua rak selesai dibuat
+        console.log("Racks:", racks);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Pencahayaan ambient dengan intensitas 50%
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.PointLight(0xffffff, 1, 100); // Cahaya titik putih dengan intensitas 100%
+        pointLight.position.set(50, 50, 50); // Letakkan cahaya di posisi (50, 50, 50)
+        scene.add(pointLight);
+
+        const hemisphereLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 1); // Pencahayaan hemisphere dengan warna atas kuning dan bawah biru, intensitas 100%
+        scene.add(hemisphereLight);
+
+        // Function to animate camera to target
+        function animateCameraToTarget(target, duration) {
+            const initialPosition = new THREE.Vector3().copy(camera.position);
+            const targetPosition = new THREE.Vector3().copy(target);
+
+            let startTime = null;
+
+            function animate(timestamp) {
+                if (!startTime) {
+                    startTime = timestamp;
+                }
+
+                const elapsed = timestamp - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                const newPosition = initialPosition.clone().lerp(targetPosition, progress);
+                camera.position.copy(newPosition);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        function setCameraToCenter() {
+            // Hitung titik tengah desain 3D
+            let minX = Infinity, minY = Infinity, minZ = Infinity;
+            let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+            cubes.forEach(cube => {
+                minX = Math.min(minX, cube.position.x);
+                minY = Math.min(minY, cube.position.y);
+                minZ = Math.min(minZ, cube.position.z);
+                maxX = Math.max(maxX, cube.position.x);
+                maxY = Math.max(maxY, cube.position.y);
+                maxZ = Math.max(maxZ, cube.position.z);
+            });
+
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+            const centerZ = (minZ + maxZ) / 2;
+
+            // Atur controls.target ke titik tengah desain 3D
+            controls.target.set(centerX, centerY, centerZ);
+
+            // Memperbarui kontrol
+            controls.update();
+        }
+
+        // Panggil fungsi setCameraToCenter() untuk mengatur kamera ke tengah-tengah desain 3D
+        setCameraToCenter();
+
+
+        function showProductInfo(data) {
+            const productName = document.getElementById('productName');
+            const productQty = document.getElementById('productQty');
+            const productUom = document.getElementById('productUom');
+            const productLotNumber = document.getElementById('productLotNumber');
+            const productStockMovement = document.getElementById('productStockMovement');
+            const productStockStatus = document.getElementById('productStockStatus');
+            const productExpiredDate = document.getElementById('productExpiredDate');
+
+            productName.textContent = data.product;
+            productQty.textContent = data.qty;
+            productUom.textContent = data.uom;
+            productLotNumber.textContent = data.lot_number;
+            productStockMovement.textContent = data.stock_movement;
+            productStockStatus.textContent = data.stock_status;
+            productExpiredDate.textContent = data.expired_date;
+        }
+
+        // Function to handle click on cube
+        let previousCube = null;
+
+        function handleClick(event) {
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            // Menghitung posisi mouse dalam koordinat -1 hingga 1
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            // Menetapkan raycaster dan mendapatkan kubus yang diklik
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(cubes);
+
+            // Memeriksa jika ada kubus yang diklik
+            if (intersects.length > 0) {
+                const selectedCube = intersects[0].object;
+
+                // Mengubah material kubus sebelumnya kembali menjadi transparan
+                if (previousCube && previousCube !== selectedCube) {
+                    previousCube.material = new THREE.MeshBasicMaterial({ color: 0x0E95FE, opacity: 0.5, transparent: true });
+                }
+
+                // Mengubah material kubus yang diklik menjadi solid
+                selectedCube.material = new THREE.MeshBasicMaterial({ color: 0x0E95FE });
+
+                // Posisi Zoom In
+                const target = new THREE.Vector3().copy(selectedCube.position);
+                target.y += 0.5; // Sesuaikan ketinggian agar kamera fokus ke tengah kubus
+                target.x += 3;
+                target.z += 1.5;
+                animateCameraToTarget(target, 500);
+
+                // Tambahkan kontrol agar kamera menghadap ke arah kubus yang diklik
+                controls.target.copy(selectedCube.position);
+
+                // Menampilkan informasi produk pada cube yang diklik
+                if (selectedCube.data) {
+                    showProductInfo(selectedCube.data);
+                } else {
+                    // Jika kubus tidak memiliki data, tampilkan informasi kosong
+                    showProductInfo({});
+                }
+
+                // Simpan kubus yang diklik sebagai kubus sebelumnya
+                previousCube = selectedCube;
+            }
+        }
+
+        renderer.domElement.addEventListener('click', handleClick);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+    </script>
+
+    <!-- Container untuk menampilkan informasi produk -->
+    <div id="productInfo" class="product-info">
+        <h3 id="productName"></h3>
+        <p><span>Quantity:</span> <span id="productQty"></span></p>
+        <p><span>UOM:</span> <span id="productUom"></span></p>
+        <p><span>Lot Number:</span> <span id="productLotNumber"></span></p>
+        <p><span>Stock Movement:</span> <span id="productStockMovement"></span></p>
+        <p><span>Stock Status:</span> <span id="productStockStatus"></span></p>
+        <p><span>Expired Date:</span> <span id="productExpiredDate"></span></p>
+    </div>
+
+</body>
+
+</html>
